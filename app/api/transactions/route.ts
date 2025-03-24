@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { supabase } from '@/lib/supabase'
 import { authenticateRequest } from '@/lib/auth'
 import { z } from 'zod'
 
@@ -19,11 +19,14 @@ export async function POST(req: NextRequest) {
     const { accountId, type, amount, toAccountId } = transactionSchema.parse(body)
 
     // Verify account ownership
-    const account = await prisma.account.findFirst({
-      where: { id: accountId, userId: user.id },
-    })
+    const { data: account, error: accountError } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', accountId)
+      .eq('user_id', user.id)
+      .single()
 
-    if (!account) {
+    if (accountError || !account) {
       return NextResponse.json(
         { error: 'Account not found or unauthorized' },
         { status: 404 }
@@ -65,26 +68,43 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleDeposit(account: any, amount: number) {
-  const transaction = await prisma.$transaction(async (tx) => {
-    const updatedAccount = await tx.account.update({
-      where: { id: account.id },
-      data: { balance: { increment: amount } },
-    })
+  // Update account balance
+  const { error: updateError } = await supabase
+    .from('accounts')
+    .update({ balance: account.balance + amount })
+    .eq('id', account.id)
 
-    const transaction = await tx.transaction.create({
-      data: {
-        accountId: account.id,
-        userId: account.userId,
-        type: 'DEPOSIT',
-        amount,
-        status: 'COMPLETED',
-      },
-    })
+  if (updateError) {
+    return NextResponse.json(
+      { error: 'Failed to update account balance' },
+      { status: 500 }
+    )
+  }
 
-    return { updatedAccount, transaction }
+  // Create transaction record
+  const { data: transaction, error: transactionError } = await supabase
+    .from('transactions')
+    .insert({
+      account_id: account.id,
+      user_id: account.user_id,
+      type: 'DEPOSIT',
+      amount,
+      status: 'COMPLETED',
+    })
+    .select()
+    .single()
+
+  if (transactionError) {
+    return NextResponse.json(
+      { error: 'Failed to create transaction record' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ 
+    updatedAccount: { ...account, balance: account.balance + amount },
+    transaction 
   })
-
-  return NextResponse.json(transaction)
 }
 
 async function handleWithdrawal(account: any, amount: number) {
@@ -95,26 +115,43 @@ async function handleWithdrawal(account: any, amount: number) {
     )
   }
 
-  const transaction = await prisma.$transaction(async (tx) => {
-    const updatedAccount = await tx.account.update({
-      where: { id: account.id },
-      data: { balance: { decrement: amount } },
-    })
+  // Update account balance
+  const { error: updateError } = await supabase
+    .from('accounts')
+    .update({ balance: account.balance - amount })
+    .eq('id', account.id)
 
-    const transaction = await tx.transaction.create({
-      data: {
-        accountId: account.id,
-        userId: account.userId,
-        type: 'WITHDRAWAL',
-        amount,
-        status: 'COMPLETED',
-      },
-    })
+  if (updateError) {
+    return NextResponse.json(
+      { error: 'Failed to update account balance' },
+      { status: 500 }
+    )
+  }
 
-    return { updatedAccount, transaction }
+  // Create transaction record
+  const { data: transaction, error: transactionError } = await supabase
+    .from('transactions')
+    .insert({
+      account_id: account.id,
+      user_id: account.user_id,
+      type: 'WITHDRAWAL',
+      amount,
+      status: 'COMPLETED',
+    })
+    .select()
+    .single()
+
+  if (transactionError) {
+    return NextResponse.json(
+      { error: 'Failed to create transaction record' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ 
+    updatedAccount: { ...account, balance: account.balance - amount },
+    transaction 
   })
-
-  return NextResponse.json(transaction)
 }
 
 async function handleTransfer(fromAccount: any, toAccountId: string, amount: number) {
@@ -125,43 +162,70 @@ async function handleTransfer(fromAccount: any, toAccountId: string, amount: num
     )
   }
 
-  const toAccount = await prisma.account.findUnique({
-    where: { id: toAccountId },
-  })
+  // Get destination account
+  const { data: toAccount, error: toAccountError } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('id', toAccountId)
+    .single()
 
-  if (!toAccount) {
+  if (toAccountError || !toAccount) {
     return NextResponse.json(
       { error: 'Destination account not found' },
       { status: 404 }
     )
   }
 
-  const transaction = await prisma.$transaction(async (tx) => {
-    // Deduct from source account
-    const updatedFromAccount = await tx.account.update({
-      where: { id: fromAccount.id },
-      data: { balance: { decrement: amount } },
-    })
+  // Update source account balance
+  const { error: fromUpdateError } = await supabase
+    .from('accounts')
+    .update({ balance: fromAccount.balance - amount })
+    .eq('id', fromAccount.id)
 
-    // Add to destination account
-    const updatedToAccount = await tx.account.update({
-      where: { id: toAccountId },
-      data: { balance: { increment: amount } },
-    })
+  if (fromUpdateError) {
+    return NextResponse.json(
+      { error: 'Failed to update source account' },
+      { status: 500 }
+    )
+  }
 
-    // Create transaction record
-    const transaction = await tx.transaction.create({
-      data: {
-        accountId: fromAccount.id,
-        userId: fromAccount.userId,
-        type: 'TRANSFER',
-        amount,
-        status: 'COMPLETED',
-      },
-    })
+  // Update destination account balance
+  const { error: toUpdateError } = await supabase
+    .from('accounts')
+    .update({ balance: toAccount.balance + amount })
+    .eq('id', toAccountId)
 
-    return { updatedFromAccount, updatedToAccount, transaction }
+  if (toUpdateError) {
+    return NextResponse.json(
+      { error: 'Failed to update destination account' },
+      { status: 500 }
+    )
+  }
+
+  // Create transaction record
+  const { data: transaction, error: transactionError } = await supabase
+    .from('transactions')
+    .insert({
+      account_id: fromAccount.id,
+      user_id: fromAccount.user_id,
+      type: 'TRANSFER',
+      amount,
+      status: 'COMPLETED',
+      to_account_id: toAccountId,
+    })
+    .select()
+    .single()
+
+  if (transactionError) {
+    return NextResponse.json(
+      { error: 'Failed to create transaction record' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({
+    updatedFromAccount: { ...fromAccount, balance: fromAccount.balance - amount },
+    updatedToAccount: { ...toAccount, balance: toAccount.balance + amount },
+    transaction,
   })
-
-  return NextResponse.json(transaction)
 } 

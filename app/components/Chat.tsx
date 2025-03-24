@@ -10,7 +10,7 @@ interface Message {
 
 const INITIAL_MESSAGE: Message = {
   role: 'system',
-  content: 'Hello! I am your AI assistant. I can help you with questions about trading, investments, and financial markets. How can I assist you today?',
+  content: 'Welcome to Covera Digital AI\n\nAsk questions about policies, claims, or get quotes for your insurance needs.',
   timestamp: new Date(),
 };
 
@@ -70,101 +70,97 @@ export default function Chat() {
     }
   };
 
-  const formatTime = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true,
-    }).format(date);
-  };
-
   return (
-    <div className="max-w-4xl mx-auto p-4 h-[calc(100vh-6rem)]">
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-4 h-[calc(100%-4rem)] flex flex-col">
-        <div className="flex-1 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-          {messages.map((message, index) => (
+    <div className="flex flex-col h-full">
+      {/* Welcome Message */}
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex flex-col items-center justify-center text-center mb-8">
+          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+            <span className="text-2xl">💬</span>
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Welcome to Covera Digital AI</h2>
+          <p className="text-gray-600 max-w-md">
+            Ask questions about policies, claims, or get quotes for your insurance needs.
+          </p>
+        </div>
+
+        {/* Document Processing Section */}
+        <div className="flex flex-col items-center justify-center text-center mb-8">
+          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+            <span className="text-2xl">📄</span>
+          </div>
+          <h3 className="text-lg font-semibold mb-2">OCR Document Processing</h3>
+          <p className="text-gray-600 max-w-md mb-4">
+            Upload insurance documents to extract and analyze text automatically.
+          </p>
+          <button className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Scan Document
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="space-y-4">
+          {messages.slice(1).map((message, index) => (
             <div
               key={index}
               className={`flex ${
                 message.role === 'user' ? 'justify-end' : 'justify-start'
-              } items-end space-x-2`}
+              }`}
             >
-              {message.role !== 'user' && (
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm">
-                  AI
-                </div>
-              )}
               <div
-                className={`flex flex-col ${
-                  message.role === 'user' ? 'items-end' : 'items-start'
-                }`}
+                className={`max-w-[80%] ${
+                  message.role === 'user' ? 'bg-orange-500 text-white' : 'bg-gray-100'
+                } rounded-lg px-4 py-2`}
               >
-                <div
-                  className={`px-4 py-2 rounded-2xl max-w-[80%] ${
-                    message.role === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : message.role === 'system'
-                      ? 'bg-gray-100 text-gray-700'
-                      : 'bg-gray-200 text-gray-800'
-                  }`}
-                >
-                  <p className="text-sm md:text-base whitespace-pre-wrap">
-                    {message.content}
-                  </p>
-                </div>
-                {message.timestamp && (
-                  <span className="text-xs text-gray-500 mt-1">
-                    {formatTime(new Date(message.timestamp))}
-                  </span>
-                )}
+                {message.content}
               </div>
-              {message.role === 'user' && (
-                <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white text-sm">
-                  You
-                </div>
-              )}
             </div>
           ))}
           {isLoading && (
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm">
-                AI
-              </div>
-              <div className="bg-gray-200 rounded-2xl px-4 py-2">
+            <div className="flex justify-start">
+              <div className="bg-gray-100 rounded-lg px-4 py-2">
                 <div className="flex space-x-2">
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
                 </div>
               </div>
             </div>
           )}
-          {error && (
-            <div className="flex justify-center">
-              <div className="bg-red-50 text-red-500 px-4 py-2 rounded-lg text-sm">
-                Error: {error}
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
         </div>
-        <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base"
-            disabled={isLoading}
-          />
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="border-t px-6 py-4">
+        <form onSubmit={handleSubmit} className="flex items-center gap-4">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type your message..."
+              className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              📎
+            </button>
+          </div>
           <button
             type="submit"
-            className="px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
+            className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 focus:outline-none disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             disabled={isLoading || !input.trim()}
           >
             Send
           </button>
         </form>
+        {error && (
+          <p className="mt-2 text-sm text-red-500">{error}</p>
+        )}
       </div>
     </div>
   );

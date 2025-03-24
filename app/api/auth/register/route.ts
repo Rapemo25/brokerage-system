@@ -1,60 +1,62 @@
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { hashPassword, generateToken } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
 import { z } from 'zod'
 
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  name: z.string().optional(),
+  name: z.string().min(2).optional(),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { email, password, name } = registerSchema.parse(body)
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
+    // Register user with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
     })
 
-    if (existingUser) {
+    if (authError) {
       return NextResponse.json(
-        { error: 'User already exists' },
+        { error: authError.message },
         { status: 400 }
       )
     }
 
-    // Create user
-    const hashedPassword = await hashPassword(password)
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-      },
-    })
+    if (!authData.user) {
+      return NextResponse.json(
+        { error: 'Failed to create user' },
+        { status: 500 }
+      )
+    }
 
-    // Generate token
-    const token = generateToken(user.id)
+    // Create user profile in the users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .insert({
+        id: authData.user.id,
+        email: email,
+        name: name,
+        role: 'USER',
+      })
+      .select()
+      .single()
 
-    // Create initial account
-    await prisma.account.create({
-      data: {
-        userId: user.id,
-        balance: 0,
-        currency: 'USD',
-      },
-    })
+    if (userError) {
+      // If profile creation fails, we should clean up the auth user
+      await supabase.auth.admin.deleteUser(authData.user.id)
+      return NextResponse.json(
+        { error: 'Failed to create user profile' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
+      user: userData,
+      session: authData.session,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -64,7 +66,7 @@ export async function POST(req: Request) {
       )
     }
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Registration failed' },
       { status: 500 }
     )
   }

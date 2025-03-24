@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from './prisma'
 import { supabase } from './supabase'
+import type { User } from './supabase'
 
 export async function hashPassword(password: string): Promise<string> {
   const { data, error } = await supabase.auth.signUp({
@@ -30,25 +30,35 @@ export async function verifyToken(token: string): Promise<string> {
   }
 }
 
-export async function authenticateRequest(req: NextRequest) {
+export async function authenticateRequest(req: NextRequest): Promise<User | NextResponse> {
   try {
-    const token = req.headers.get('authorization')?.split(' ')[1]
-    if (!token) {
-      return NextResponse.json({ error: 'No token provided' }, { status: 401 })
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    if (error || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
     }
 
-    const userId = await verifyToken(token)
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, role: true }
-    })
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', session.user.id)
+      .single()
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 401 })
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
     }
 
-    return user
+    return user as User
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    return NextResponse.json(
+      { error: 'Authentication failed' },
+      { status: 401 }
+    )
   }
 } 

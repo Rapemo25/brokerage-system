@@ -11,6 +11,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,6 +21,7 @@ export default function Chat() {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setError(null);
 
     try {
       const response = await fetch('/api/chat', {
@@ -32,15 +34,16 @@ export default function Chat() {
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        throw new Error(data.details || data.error || 'Failed to get response');
       }
 
-      const data = await response.json();
       setMessages(prev => [...prev, data]);
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to get response from AI');
+      setError(error instanceof Error ? error.message : 'Failed to get response from AI');
     } finally {
       setIsLoading(false);
     }
@@ -70,6 +73,11 @@ export default function Chat() {
         {isLoading && (
           <div className="text-center text-gray-500">
             AI is thinking...
+          </div>
+        )}
+        {error && (
+          <div className="text-center text-red-500 mt-2 p-2 bg-red-50 rounded-lg">
+            Error: {error}
           </div>
         )}
       </div>
